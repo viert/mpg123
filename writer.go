@@ -14,29 +14,37 @@ const (
 )
 
 type PcmWriter struct {
-	output io.Writer
-	handle Handle
+	output           io.Writer
+	handle           Handle
+	DecodedChunkSize int
 }
 
-func (pw *PcmWriter) Write(p []byte) (n int, err error) {
-	chunk, retcode, err := Decode(pw.handle, &p, OUTPUT_MAX_LENGTH)
-	m, writeErr := pw.output.Write(chunk)
-	if writeErr != nil {
-		return n, writeErr
-	}
+func (pw *PcmWriter) Write(p []byte) (int, error) {
+	pw.DecodedChunkSize = 0
 
-	n += m
+	chunk, retcode, err := Decode(pw.handle, &p, OUTPUT_MAX_LENGTH)
+
+	n, writeErr := pw.output.Write(chunk)
+	if writeErr != nil {
+		return 0, writeErr
+	}
 
 	for retcode != MPG123_NEED_MORE && err == nil {
 		chunk, retcode, err = Decode(pw.handle, nil, OUTPUT_MAX_LENGTH)
 		m, writeErr = pw.output.Write(chunk)
 		if writeErr != nil {
-			return n, writeErr
+			return 0, writeErr
 		}
 		n += m
 	}
 
-	return
+	if err != nil {
+		return 0, err
+	}
+
+	pw.DecodedChunkSize = n
+
+	return len(p), nil
 }
 
 func Cleanup(pw *PcmWriter) {
